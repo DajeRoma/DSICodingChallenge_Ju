@@ -52,7 +52,8 @@
         this.state = {
           loading: true,
           error: null,
-          data: null
+          data: null,
+          input: null
         };
       }
 
@@ -88,10 +89,36 @@
         );
       }
 
+      callFuzzyCityAPI(cityName, lat, long) {
+        const url = 'http://localhost:2345/cities?like=' + cityName +
+                    '&latitude=' + lat + "&longitude=" + long;
+        $.getJSON(url)
+         .done(
+          (value) => this.setState({
+            loading: false,
+            data: value
+          })
+        ).fail(
+          (jqXHR, textStatus) => this.setState({
+            loading: false,
+            error: jqXHR.status
+          })
+        );
+      }
+
       handleClick() {
         console.log(this.refs.userinput.value);
         console.log(this.refs.latInput.value);
-        this.callAPI(this.refs.userinput.value);
+        console.log(this.refs.longInput.value);
+        this.setState({input: this.refs.userinput.value});
+        if (this.refs.latInput.value === "" || this.refs.longInput.value === "") {
+          this.callAPI(this.refs.userinput.value);
+        } else {
+          this.callFuzzyCityAPI(this.refs.userinput.value,
+                        this.refs.latInput.value,
+                        this.refs.longInput.value);
+        }
+
       }
 
       addMap() {
@@ -141,40 +168,121 @@
 
       updateMap() {
         const dataDict = this.state.data.data;
-        var map = new mapboxgl.Map({
-            container: 'map',
-            style: 'mapbox://styles/mapbox/streets-v9',
-            center: [-100, 35],
-            zoom: 2
-        });
-        let newLayer = layerTemplate;
-        newLayer['source'] = {
-            "type": "geojson",
-            "data": {
-                "type": "FeatureCollection",
-                "features": [{
-                    "type": "Feature",
-                    "geometry": {
-                        "type": "Point",
-                        "coordinates": [dataDict['longitude'], dataDict['latitude']]
-                    },
-                    "properties": {
-                        "title": dataDict['city'],
-                        "icon": "monument"
-                    }
-                }]
-            }
-        };
+        let newLayer = jQuery.extend(true, {}, layerTemplate);
+        if (this.refs.latInput.value === "" || this.refs.longInput.value === "") {
+          var map = new mapboxgl.Map({
+              container: 'map',
+              style: 'mapbox://styles/mapbox/streets-v9',
+              center: [dataDict['longitude'], dataDict['latitude']],
+              zoom: 4
+          });
+          newLayer['source'] = {
+              "type": "geojson",
+              "data": {
+                  "type": "FeatureCollection",
+                  "features": [{
+                      "type": "Feature",
+                      "geometry": {
+                          "type": "Point",
+                          "coordinates": [dataDict['longitude'], dataDict['latitude']]
+                      },
+                      "properties": {
+                          "title": dataDict['city'],
+                          "icon": "monument"
+                      }
+                  }]
+              }
+          };
+        } else {
+          var map = new mapboxgl.Map({
+              container: 'map',
+              style: 'mapbox://styles/mapbox/streets-v9',
+              center: [dataDict[0]['longitude'], dataDict[0]['latitude']],
+              zoom: 4
+          });
+          newLayer['source'] = {
+              "type": "geojson",
+              "data": {
+                  "type": "FeatureCollection",
+                  "features": []
+              }
+          };
+          for (let i in dataDict) {
+            console.log(dataDict[i]);
+            newLayer['source']["data"]["features"].push(
+              {
+                  "type": "Feature",
+                  "geometry": {
+                      "type": "Point",
+                      "coordinates": [dataDict[i]['longitude'], dataDict[i]['latitude']]
+                  },
+                  "properties": {
+                      "title": dataDict[i]['city'],
+                      "icon": "monument"
+                  }
+              }
+            );
+          }
+        }
         map.on('load', function () {
           map.addLayer(newLayer);
         });
+      }
+
+      updateTable() {
+        const dataDict = this.state.data.data;
+        let results = [];
+        if (this.refs.latInput.value === "" || this.refs.longInput.value === "") {
+          Object.keys(dataDict).map((key, index) => {
+            if (key === "alternate_names") {
+              let altNameList = [];
+              let cnt = 1;
+              dataDict[key].forEach(function(element) {
+                if (cnt == 1) {
+                  altNameList.push(<tr key={key+cnt}><td>{key}</td><td>{element}</td></tr>);
+                } else {
+                  altNameList.push(<tr key={key+cnt}><td></td><td>{element}</td></tr>);
+                }
+                cnt++;
+              });
+              results.push(altNameList);
+            } else {
+              let item = <tr key={key}><td>{key}</td><td>{dataDict[key]}</td></tr>;
+              results.unshift(item);
+            }
+          })
+        } else {
+          for (let i in dataDict) {
+            let result = [];
+            Object.keys(dataDict[i]).map((key, index) => {
+              if (key === "alternate_names") {
+                let altNameList = [];
+                let cnt = 1;
+                dataDict[i][key].forEach(function(element) {
+                  if (cnt == 1) {
+                    altNameList.push(<tr key={key+cnt}><td>{key}</td><td>{element}</td></tr>);
+                  } else {
+                    altNameList.push(<tr key={key+cnt}><td></td><td>{element}</td></tr>);
+                  }
+                  cnt++;
+                });
+                result.push(altNameList);
+              } else {
+                let item = <tr key={key}><td>{key}</td><td>{dataDict[i][key]}</td></tr>;
+                result.unshift(item);
+              }
+            })
+            result.push(<tr key={"break"}><td>______________</td><td>______________</td></tr>);
+            results.push(result);
+          }
+        }
+        return results;
       }
 
 
       render() {
         if (this.state.loading) {
           this.addMap();
-          console.log(map);
           return (
             <div>
               <table>
@@ -201,35 +309,18 @@
                   <tr><td>Longitude: </td><td><input type="text" ref="longInput" /></td></tr>
                   </tbody>
                   </table>
+                  <br></br>
                   <button onClick={this.handleClick.bind(this)}>Find city</button>
                   <br></br>
+                  <br></br>
                   <div id="result">
-                    <span>No such city</span>
+                    <span>No such city called <b>{this.state.input}</b></span>
                   </div>
                 </div>
             );
           }
           console.log(this.state.data);
-          const dataDict = this.state.data.data;
-          let results = [];
-          Object.keys(dataDict).map((key, index) => {
-            if (key === "alternate_names") {
-              let altNameList = [];
-              let cnt = 1;
-              dataDict[key].forEach(function(element) {
-                if (cnt == 1) {
-                  altNameList.push(<tr key={key+cnt}><td>{key}</td><td>{element}</td></tr>);
-                } else {
-                  altNameList.push(<tr key={key+cnt}><td></td><td>{element}</td></tr>);
-                }
-                cnt++;
-              });
-              results.push(altNameList);
-            } else {
-              let item = <tr key={key}><td>{key}</td><td>{dataDict[key]}</td></tr>;
-              results.unshift(item);
-            }
-          })
+          const results = this.updateTable();
           this.updateMap();
           return (
                 <div>
@@ -240,7 +331,9 @@
                 <tr><td>Longitude: </td><td><input type="text" ref="longInput" /></td></tr>
                 </tbody>
                 </table>
+                <br></br>
                 <button onClick={this.handleClick.bind(this)}>Find city</button>
+                <br></br>
                 <br></br>
                 <div id="result">
                   <table><tbody>{results}</tbody></table>
