@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 '''
 Created on Nov 10, 2017
-Last modified on Nov 10, 2017
+Last modified on Nov 16, 2017
 
 @author: Yiting Ju
 '''
@@ -105,7 +105,9 @@ def search_city_name_fuzzy():
 		temp_response["latitude"] = record[4]
 		temp_response["longitude"] = record[5]
 		data_response.append(temp_response)
-	if latitude and longitude:
+	if latitude and longitude and \
+			float(latitude) >= -90.0 and float(latitude) <= 90 and \
+			float(longitude) >= -180.0 and float(longitude) <= 180:
 		data_response = construct_fuzzy_result(data_response, fuzzy_name, float(latitude), float(longitude))
 	else:
 		data_response = construct_fuzzy_result(data_response, fuzzy_name, None, None)
